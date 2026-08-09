@@ -23,6 +23,7 @@ A modern fullstack application built with **Next.js**, **Material UI**, **Copilo
 
 - Node.js 18+ and npm
 - PostgreSQL 12+
+- OpenAI API key (for GPT-4 model access)
 
 ## Installation
 
@@ -36,7 +37,10 @@ Create a `.env.local` file in the root directory:
 ```
 DATABASE_URL=postgresql://user:password@localhost:5432/ai_agent
 NEXT_PUBLIC_API_URL=http://localhost:3000
+OPENAI_API_KEY=sk-your-openai-api-key
 ```
+
+Get your OpenAI API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
 3. **Run database migration**:
 ```bash
@@ -134,11 +138,51 @@ CREATE TABLE agent_history (
 4. Navigate to `http://localhost:3000` and start using the application
 5. Click "Need help?" to interact with the Copilot Kit assistant
 
+## LangChain Deep Agent Architecture
+
+### Agent Configuration
+The application uses **LangChain's React Agent** with **OpenAI GPT-4** as the LLM backbone:
+
+```typescript
+// Configured in lib/agent.ts
+const model = new ChatOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  model: 'gpt-4-turbo',
+  temperature: 0.7,
+});
+
+const agent = await createReactAgent({
+  llm: model,
+  tools: [getUsers, createUser, updateUser, deleteUser],
+});
+```
+
+### Available Tools
+The agent has access to 4 tools for user management:
+1. **get_users**: Retrieve all users from the database
+2. **create_user**: Create a new user (name, email required)
+3. **update_user**: Update user details by ID
+4. **delete_user**: Delete a user by ID
+
+### Agent Flow
+1. User sends message via Copilot Kit popup
+2. Message routed to `/api/copilotkit` endpoint
+3. Agent processes message and decides which tool(s) to use
+4. Tools execute database operations
+5. Agent formats response based on tool results
+6. Response sent back to UI and stored in agent history
+
+### Agent State Management
+- **Thread ID**: Unique conversation identifier
+- **Checkpoint**: Saves agent state at each step for resumability
+- **History**: All messages and actions logged to PostgreSQL
+
 ## Development Notes
 
-- The Copilot Kit is configured with a basic setup. Customize the instructions in `app/layout.tsx` and `app/page.tsx`
-- Agent tools are defined in `lib/agent.ts`. Add more tools as needed
-- Database queries are executed through `lib/db.ts` which handles connection pooling
+- The Deep Agent with OpenAI is fully integrated. Modify LLM settings in `lib/agent.ts`
+- Add new tools by defining them with Zod schemas in `lib/agent.ts`
+- Agent state and history are persisted in PostgreSQL (agent_state, agent_history tables)
+- The agent uses tool calling and JSON schema validation for type safety
 
 ## Future Enhancements
 

@@ -5,7 +5,7 @@ import { CopilotKit } from '@copilotkit/react-core';
 
 export const metadata: Metadata = {
   title: 'AI Agent',
-  description: 'Fullstack AI Agent with Copilot Kit',
+  description: 'Fullstack AI Agent with Copilot Kit and LangChain',
 };
 
 const theme = createTheme({
@@ -28,7 +28,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <CopilotKit publicApiKey="test-key">
+        <CopilotKit
+          runtimeUrl="/api/copilotkit"
+          agent={{
+            name: 'User Management Agent',
+            description: 'An intelligent agent for managing users and performing database operations',
+          }}
+        >
           <ThemeProvider theme={theme}>
             <CssBaseline />
             {children}

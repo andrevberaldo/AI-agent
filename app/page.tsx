@@ -187,10 +187,19 @@ export default function Home() {
       </Dialog>
 
       <CopilotPopup
-        instructions="You are a helpful assistant for managing users in the system. Help users create, edit, and delete user records."
+        instructions={`You are an intelligent User Management Agent powered by OpenAI GPT-4 and LangChain.
+
+Your capabilities:
+- List all users using get_users tool
+- Create new users using create_user tool with name and email
+- Update existing users using update_user tool
+- Delete users using delete_user tool
+
+Be helpful and conversational. When users ask to perform operations, use the appropriate tools.
+Always confirm actions before executing them. Provide clear feedback about the results.`}
         labels={{
-          initial: 'Need help?',
-          open: 'Assistant',
+          initial: 'Ask AI Agent',
+          open: 'AI Agent',
         }}
       />
     </Container>
