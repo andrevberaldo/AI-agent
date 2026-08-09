@@ -1,20 +1,14 @@
 import { query } from './db';
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { DynamicTool } from '@langchain/core/tools';
 import { z } from 'zod';
+import { HumanMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
 
 export interface AgentState {
   threadId: string;
   checkpointId: string;
   state: Record<string, any>;
   metadata?: Record<string, any>;
-}
-
-export interface Tool {
-  name: string;
-  description: string;
-  schema: z.ZodSchema;
-  execute: (input: any) => Promise<string>;
 }
 
 export class AgentStateCheckpointer {
@@ -77,93 +71,76 @@ export class AgentStateCheckpointer {
 
 export const checkpointer = new AgentStateCheckpointer();
 
-// Define agent tools with Zod schemas
-const getUsersSchema = z.object({});
-
-const createUserSchema = z.object({
-  name: z.string().describe('The full name of the user'),
-  email: z.string().email().describe('The email address of the user'),
-});
-
-const updateUserSchema = z.object({
-  id: z.number().describe('The user ID'),
-  name: z.string().optional().describe('The new name for the user'),
-  email: z.string().email().optional().describe('The new email for the user'),
-});
-
-const deleteUserSchema = z.object({
-  id: z.number().describe('The user ID to delete'),
-});
-
-export const tools: Tool[] = [
-  {
-    name: 'get_users',
-    description: 'Retrieve all users from the database with their details',
-    schema: getUsersSchema,
-    execute: async () => {
-      const result = await query('SELECT * FROM users ORDER BY created_at DESC');
-      return JSON.stringify(result.rows);
-    },
+// Deep Agent Tools using DynamicTool
+const getUsers = new DynamicTool({
+  name: 'get_users',
+  description: 'Retrieve all users from the database with their details',
+  func: async () => {
+    const result = await query('SELECT * FROM users ORDER BY created_at DESC');
+    return JSON.stringify({ success: true, data: result.rows });
   },
-  {
-    name: 'create_user',
-    description: 'Create a new user with name and email',
-    schema: createUserSchema,
-    execute: async (input: z.infer<typeof createUserSchema>) => {
-      try {
-        const result = await query(
-          'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-          [input.name, input.email]
-        );
-        return JSON.stringify({ success: true, data: result.rows[0] });
-      } catch (error: any) {
-        if (error.code === '23505') {
-          return JSON.stringify({ success: false, error: 'Email already exists' });
-        }
-        throw error;
+});
+
+const createUser = new DynamicTool({
+  name: 'create_user',
+  description: 'Create a new user with name and email',
+  func: async (input: string) => {
+    const { name, email } = JSON.parse(input);
+    try {
+      const result = await query(
+        'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
+        [name, email]
+      );
+      return JSON.stringify({ success: true, data: result.rows[0] });
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return JSON.stringify({ success: false, error: 'Email already exists' });
       }
-    },
+      throw error;
+    }
   },
-  {
-    name: 'update_user',
-    description: 'Update a user by ID with new name or email',
-    schema: updateUserSchema,
-    execute: async (input: z.infer<typeof updateUserSchema>) => {
-      try {
-        const result = await query(
-          'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
-          [input.name || null, input.email || null, input.id]
-        );
-        if (result.rows.length === 0) {
-          return JSON.stringify({ success: false, error: 'User not found' });
-        }
-        return JSON.stringify({ success: true, data: result.rows[0] });
-      } catch (error: any) {
-        if (error.code === '23505') {
-          return JSON.stringify({ success: false, error: 'Email already exists' });
-        }
-        throw error;
-      }
-    },
-  },
-  {
-    name: 'delete_user',
-    description: 'Delete a user by ID',
-    schema: deleteUserSchema,
-    execute: async (input: z.infer<typeof deleteUserSchema>) => {
-      const result = await query('DELETE FROM users WHERE id = $1 RETURNING *', [
-        input.id,
-      ]);
+});
+
+const updateUser = new DynamicTool({
+  name: 'update_user',
+  description: 'Update a user by ID with new name or email',
+  func: async (input: string) => {
+    const { id, name, email } = JSON.parse(input);
+    try {
+      const result = await query(
+        'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
+        [name || null, email || null, id]
+      );
       if (result.rows.length === 0) {
         return JSON.stringify({ success: false, error: 'User not found' });
       }
-      return JSON.stringify({
-        success: true,
-        message: `User ${input.id} deleted successfully`,
-      });
-    },
+      return JSON.stringify({ success: true, data: result.rows[0] });
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return JSON.stringify({ success: false, error: 'Email already exists' });
+      }
+      throw error;
+    }
   },
-];
+});
+
+const deleteUser = new DynamicTool({
+  name: 'delete_user',
+  description: 'Delete a user by ID',
+  func: async (input: string) => {
+    const { id } = JSON.parse(input);
+    const result = await query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return JSON.stringify({ success: false, error: 'User not found' });
+    }
+    return JSON.stringify({
+      success: true,
+      message: `User ${id} deleted successfully`,
+    });
+  },
+});
+
+export const tools = [getUsers, createUser, updateUser, deleteUser];
 
 // Initialize OpenAI LLM
 export const model = new ChatOpenAI({
@@ -172,55 +149,55 @@ export const model = new ChatOpenAI({
   temperature: 0.7,
 });
 
-// Simple agent executor
+// Deep Agent Executor with Tool Calling Loop
 export async function processAgentRequest(message: string): Promise<string> {
-  // Use the model to understand the user request and call appropriate tools
-  const toolDescriptions = tools
-    .map(
-      t =>
-        `- ${t.name}: ${t.description}`
-    )
-    .join('\n');
-
-  const systemPrompt = `You are a helpful User Management Agent. You can use the following tools:
-${toolDescriptions}
-
-When the user asks you to perform an action, respond with a JSON object:
-{
-  "toolName": "tool_name",
-  "toolInput": { /* tool input object */ },
-  "thinking": "Your reasoning"
-}
-
-If no tool is needed, respond with:
-{
-  "response": "Your response to the user"
-}`;
-
   try {
-    const response = await model.invoke([
-      new SystemMessage(systemPrompt),
-      new HumanMessage(message),
-    ]);
+    let messages: BaseMessage[] = [new HumanMessage(message)];
+    let iterations = 0;
+    const maxIterations = 10;
 
-    const content = response.content as string;
+    while (iterations < maxIterations) {
+      iterations++;
 
-    try {
-      const parsed = JSON.parse(content);
+      const response = await model.invoke(messages);
+      messages.push(response);
 
-      if (parsed.toolName) {
-        const tool = tools.find(t => t.name === parsed.toolName);
-        if (tool) {
-          const result = await tool.execute(parsed.toolInput);
-          return result;
-        }
+      if (!('tool_calls' in response) || !(response.tool_calls as any)?.length) {
+        return response.content as string;
       }
 
-      return parsed.response || content;
-    } catch {
-      return content;
+      for (const toolCall of (response.tool_calls as any)) {
+        const tool = tools.find(t => t.name === toolCall.name);
+        if (tool) {
+          try {
+            const input = typeof toolCall.args === 'string'
+              ? toolCall.args
+              : JSON.stringify(toolCall.args);
+
+            const result = await tool.invoke(input);
+            messages.push(
+              new ToolMessage({
+                content: result as string,
+                tool_call_id: toolCall.id || `call_${Date.now()}`,
+                name: toolCall.name,
+              })
+            );
+          } catch (error) {
+            messages.push(
+              new ToolMessage({
+                content: `Error executing tool: ${String(error)}`,
+                tool_call_id: toolCall.id || `call_${Date.now()}`,
+                name: toolCall.name,
+              })
+            );
+          }
+        }
+      }
     }
+
+    return 'Request completed with max iterations reached';
   } catch (error) {
+    console.error('Deep Agent Error:', error);
     throw error;
   }
 }
