@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAgent, checkpointer } from '@/lib/agent';
+import { checkpointer, processAgentRequest } from '@/lib/agent';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
@@ -22,17 +22,8 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
-    // Get or create agent state
-    const agent = await createAgent();
-    const input = { messages: [{ type: 'user', content: message }] };
-
-    // Execute agent
-    const result = await agent.invoke({
-      messages: [{ role: 'user', content: message }],
-    });
-
-    const assistantMessage =
-      result.messages[result.messages.length - 1]?.content || 'No response';
+    // Process message with agent
+    const assistantMessage = await processAgentRequest(message);
 
     // Save assistant response to history
     await checkpointer.saveHistory(finalThreadId, 'assistant', {
@@ -50,7 +41,7 @@ export async function POST(request: NextRequest) {
         responseGenerated: true,
       },
       {
-        agentSteps: result.messages?.length || 0,
+        processedAt: new Date().toISOString(),
       }
     );
 

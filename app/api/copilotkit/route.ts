@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAgent } from '@/lib/agent';
+import { processAgentRequest } from '@/lib/agent';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,29 +13,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const agent = await createAgent();
-
-    // Format messages for the agent
     const lastMessage = messages[messages.length - 1];
-
-    // Execute agent with the message
-    const response = await agent.invoke({
-      messages: [
-        {
-          role: 'user',
-          content: lastMessage.content,
-        },
-      ],
-    });
-
-    // Extract the assistant's response
-    const assistantMessage = response.messages?.[response.messages.length - 1];
+    const response = await processAgentRequest(lastMessage.content);
 
     return NextResponse.json({
       messages: [
         {
           role: 'assistant',
-          content: assistantMessage?.content || 'I processed your request.',
+          content: response || 'I processed your request.',
         },
       ],
     });
@@ -51,7 +36,7 @@ export async function POST(request: NextRequest) {
           },
         ],
       },
-      { status: 200 } // Return 200 to avoid breaking the UI
+      { status: 200 }
     );
   }
 }

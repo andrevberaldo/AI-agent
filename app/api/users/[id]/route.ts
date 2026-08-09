@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const result = await query('SELECT * FROM users WHERE id = $1', [params.id]);
+    const result = await query('SELECT * FROM users WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -18,15 +19,16 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const { name, email } = body;
 
     const result = await query(
       'UPDATE users SET name = $1, email = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
-      [name, email, params.id]
+      [name, email, id]
     );
 
     if (result.rows.length === 0) {
@@ -47,11 +49,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const result = await query('DELETE FROM users WHERE id = $1 RETURNING *', [
-      params.id,
+      id,
     ]);
 
     if (result.rows.length === 0) {

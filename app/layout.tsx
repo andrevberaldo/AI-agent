@@ -1,12 +1,11 @@
+'use client';
+
 import type { Metadata } from 'next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import '@copilotkit/react-ui/styles.css';
 import { CopilotKit } from '@copilotkit/react-core';
 
-export const metadata: Metadata = {
-  title: 'AI Agent',
-  description: 'Fullstack AI Agent with Copilot Kit and LangChain',
-};
+// Metadata is handled at a higher level for client-side rendered layout
 
 const theme = createTheme({
   palette: {
@@ -28,13 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <CopilotKit
-          runtimeUrl="/api/copilotkit"
-          agent={{
-            name: 'User Management Agent',
-            description: 'An intelligent agent for managing users and performing database operations',
-          }}
-        >
+        <CopilotKit runtimeUrl="/api/copilotkit">
           <ThemeProvider theme={theme}>
             <CssBaseline />
             {children}

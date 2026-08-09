@@ -197,10 +197,6 @@ Your capabilities:
 
 Be helpful and conversational. When users ask to perform operations, use the appropriate tools.
 Always confirm actions before executing them. Provide clear feedback about the results.`}
-        labels={{
-          initial: 'Ask AI Agent',
-          open: 'AI Agent',
-        }}
       />
     </Container>
   );
