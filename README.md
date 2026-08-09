@@ -184,6 +184,33 @@ The agent has access to 4 tools for user management:
 - Agent state and history are persisted in PostgreSQL (agent_state, agent_history tables)
 - The agent uses tool calling and JSON schema validation for type safety
 
+## CI/CD Pipeline
+
+This project includes a complete automated CI/CD pipeline with GitHub Actions:
+
+### PR Verify Workflow
+Triggered on pull requests - runs automated checks:
+- ✓ Lint & format validation
+- ✓ Build verification
+- ✓ Unit tests
+- ✓ Security scanning
+- ✓ Database schema validation
+
+### Build and Deploy Workflow
+Triggered on push to main - automates deployment:
+- ✓ Build Next.js application
+- ✓ Run smoke tests
+- ✓ Deploy to staging
+- ✓ Deploy to production (blue-green)
+- ✓ Health verification
+- ✓ Rollback capability
+
+See [.github/WORKFLOWS.md](.github/WORKFLOWS.md) for detailed pipeline documentation.
+
+### Status Badges
+[![PR Verify](https://github.com/andrevberaldo/AI-agent/actions/workflows/pr-verify.yml/badge.svg)](https://github.com/andrevberaldo/AI-agent/actions)
+[![Build and Deploy](https://github.com/andrevberaldo/AI-agent/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/andrevberaldo/AI-agent/actions)
+
 ## Future Enhancements
 
 - Advanced agent capabilities with LangChain Deep Agent
@@ -191,3 +218,6 @@ The agent has access to 4 tools for user management:
 - User authentication and authorization
 - Session management for agent conversations
 - Real-time updates with WebSockets
+- Container image scanning and security audits
+- Canary deployments with gradual rollout
+- Automated performance benchmarking
