@@ -1,12 +1,12 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, ToolMessage } from '@langchain/core/messages';
+import { createDeepAgent } from 'deepagents';
 import { tools } from './tools';
 
 /**
  * Deep Agent Implementation
  *
- * This is a custom implementation of the Deep Agent pattern as described in:
- * https://reference.langchain.com/javascript/deepagents
+ * Uses the official LangChain DeepAgent from the deepagents package.
+ * Reference: https://reference.langchain.com/javascript/deepagents
  *
  * The Deep Agent pattern enables:
  * - Multi-step reasoning through iterative tool usage
@@ -17,95 +17,68 @@ import { tools } from './tools';
 
 // Initialize OpenAI LLM with GPT-4 Turbo
 export const model = new ChatOpenAI({
-  openAIApiKey: process.env.OPENAI_API_KEY,
-  modelName: 'gpt-4-turbo',
+  apiKey: process.env.OPENAI_API_KEY,
+  model: 'gpt-4-turbo',
   temperature: 0.7,
 });
 
+// Initialize Deep Agent instance
+let deepAgent: any = null;
+
 /**
- * Deep Agent Executor
+ * Initialize the Deep Agent
+ * Lazy initialization to avoid unnecessary agent creation
+ */
+async function initializeDeepAgent() {
+  if (!deepAgent) {
+    deepAgent = await createDeepAgent({
+      model: model as any,
+      tools,
+    });
+  }
+  return deepAgent;
+}
+
+/**
+ * Process Agent Request
  *
- * Implements the iterative tool calling loop:
- * 1. Send message to LLM
- * 2. LLM analyzes and decides which tools to call
- * 3. Tools are executed and results returned to LLM
- * 4. Process repeats until LLM provides final response
+ * Invokes the Deep Agent to process a user message with tool calling capability.
+ * The agent automatically:
+ * 1. Analyzes the user message
+ * 2. Decides which tools to call
+ * 3. Executes selected tools
+ * 4. Integrates results and iterates if needed
+ * 5. Returns final response
  *
  * @param message - User message to process
  * @returns Final response from the agent
  */
 export async function processAgentRequest(message: string): Promise<string> {
   try {
-    // Create tool map for efficient lookup
-    const toolMap = new Map(tools.map(t => [t.name, t]));
+    const agent = await initializeDeepAgent();
 
-    // Initialize conversation with user message
-    const messages: any[] = [new HumanMessage(message)];
-    let iterations = 0;
-    const maxIterations = 10;
+    // Invoke the Deep Agent with the user message
+    const result = await agent.invoke({
+      input: message,
+    });
 
-    while (iterations < maxIterations) {
-      iterations++;
+    // Extract and return the response
+    if (result?.output) {
+      return typeof result.output === 'string'
+        ? result.output
+        : JSON.stringify(result.output);
+    }
 
-      // Step 1: Call LLM with current message history
-      const response = await (model.invoke as any)(messages);
-      messages.push(response);
-
-      // Step 2: Check if LLM wants to use any tools
-      const toolCalls = response.tool_calls;
-      if (!toolCalls || toolCalls.length === 0) {
-        // No tools to call - return the final response
-        return typeof response.content === 'string'
-          ? response.content
-          : JSON.stringify(response.content);
-      }
-
-      // Step 3: Execute each tool call
-      for (const toolCall of toolCalls) {
-        const tool = toolMap.get(toolCall.name);
-
-        if (!tool) {
-          messages.push(
-            new ToolMessage({
-              content: `Tool not found: ${toolCall.name}`,
-              tool_call_id: toolCall.id || `call_${Date.now()}`,
-              name: toolCall.name,
-            })
-          );
-          continue;
-        }
-
-        try {
-          // Parse arguments (can be object or JSON string)
-          const args = typeof toolCall.args === 'string'
-            ? JSON.parse(toolCall.args)
-            : (toolCall.args || {});
-
-          // Execute the tool
-          const result = await (tool as any).invoke(args);
-
-          // Step 4: Return tool result to LLM
-          messages.push(
-            new ToolMessage({
-              content: typeof result === 'string' ? result : JSON.stringify(result),
-              tool_call_id: toolCall.id || `call_${Date.now()}`,
-              name: toolCall.name,
-            })
-          );
-        } catch (error: any) {
-          // Handle tool errors gracefully
-          messages.push(
-            new ToolMessage({
-              content: `Error: ${error?.message || String(error)}`,
-              tool_call_id: toolCall.id || `call_${Date.now()}`,
-              name: toolCall.name,
-            })
-          );
-        }
+    if (result?.messages) {
+      const lastMessage = result.messages[result.messages.length - 1];
+      if (lastMessage?.content) {
+        return typeof lastMessage.content === 'string'
+          ? lastMessage.content
+          : JSON.stringify(lastMessage.content);
       }
     }
 
-    return `Agent completed after reaching ${maxIterations} iterations`;
+    return 'Agent completed processing';
   } catch (error) {
     console.error('Deep Agent Error:', error);
     throw error;
