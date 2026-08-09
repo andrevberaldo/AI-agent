@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { createDeepAgent } from 'deepagents';
 import { tools } from './tools';
+import { postgresCheckpointer } from './postgres-checkpointer';
 
 /**
  * Deep Agent Implementation
@@ -34,6 +35,7 @@ async function initializeDeepAgent() {
     deepAgent = await createDeepAgent({
       model: model as any,
       tools,
+      checkpointer: postgresCheckpointer as any,
     });
   }
   return deepAgent;
