@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkpointer, processAgentRequest } from '@/lib/agent';
+import { checkpointer } from '@/lib/agent';
+import { processAgentRequest } from '@/lib/deepagent';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {

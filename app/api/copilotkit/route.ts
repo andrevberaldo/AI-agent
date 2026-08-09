@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { processAgentRequest } from '@/lib/agent';
+import { processAgentRequest } from '@/lib/deepagent';
 
 export async function POST(request: NextRequest) {
   try {
