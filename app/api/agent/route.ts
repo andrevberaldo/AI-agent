@@ -3,6 +3,16 @@ import { query } from '@/lib/db';
 import { processAgentRequest } from '@/lib/deepagent';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * Primary Agent API Endpoint
+ *
+ * Architecture: Deep Agent is the single primary AI framework.
+ * - Tools: Defined in lib/tools.ts using @langchain/core/tools
+ * - Agent: Implemented via createDeepAgent in lib/deepagent.ts
+ * - Checkpointing: Handled by PostgresCheckpointSaver in lib/postgres-checkpointer.ts
+ * - UI: CopilotKit widget uses /api/copilotkit as thin adapter to this endpoint
+ */
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

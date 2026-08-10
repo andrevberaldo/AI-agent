@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processAgentRequest } from '@/lib/deepagent';
 
+/**
+ * CopilotKit UI Adapter Endpoint
+ *
+ * This is a thin adapter that converts CopilotKit message format
+ * to the primary Deep Agent endpoint. It enables the CopilotKit chat widget
+ * to use the Deep Agent backend without duplication.
+ *
+ * Primary logic lives in /api/agent - any changes to agent behavior
+ * should be made there first.
+ */
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
