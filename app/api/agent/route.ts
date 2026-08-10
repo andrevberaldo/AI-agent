@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkpointer } from '@/lib/agent';
+import { query } from '@/lib/db';
 import { processAgentRequest } from '@/lib/deepagent';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -18,36 +18,58 @@ export async function POST(request: NextRequest) {
     const finalThreadId = threadId || uuidv4();
 
     // Save user message to history
-    await checkpointer.saveHistory(finalThreadId, 'user', {
-      text: message,
-      timestamp: new Date().toISOString(),
-    });
+    await query(
+      `INSERT INTO agent_history (thread_id, message_type, content)
+       VALUES ($1, $2, $3)`,
+      [finalThreadId, 'user', JSON.stringify({
+        text: message,
+        timestamp: new Date().toISOString(),
+      })]
+    );
 
     // Process message with agent
     const assistantMessage = await processAgentRequest(message);
 
     // Save assistant response to history
-    await checkpointer.saveHistory(finalThreadId, 'assistant', {
-      text: assistantMessage,
-      timestamp: new Date().toISOString(),
-    });
+    await query(
+      `INSERT INTO agent_history (thread_id, message_type, content)
+       VALUES ($1, $2, $3)`,
+      [finalThreadId, 'assistant', JSON.stringify({
+        text: assistantMessage,
+        timestamp: new Date().toISOString(),
+      })]
+    );
 
     // Save agent state checkpoint
     const checkpointId = uuidv4();
-    await checkpointer.saveCheckpoint(
-      finalThreadId,
-      checkpointId,
-      {
-        lastMessage: message,
-        responseGenerated: true,
-      },
-      {
-        processedAt: new Date().toISOString(),
-      }
+    await query(
+      `INSERT INTO agent_state (thread_id, checkpoint_id, state, metadata)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (thread_id) DO UPDATE SET
+       checkpoint_id = $2, state = $3, metadata = $4, updated_at = CURRENT_TIMESTAMP`,
+      [
+        finalThreadId,
+        checkpointId,
+        JSON.stringify({
+          lastMessage: message,
+          responseGenerated: true,
+        }),
+        JSON.stringify({
+          processedAt: new Date().toISOString(),
+        })
+      ]
     );
 
     // Get updated history
-    const history = await checkpointer.getHistory(finalThreadId);
+    const historyResult = await query(
+      'SELECT * FROM agent_history WHERE thread_id = $1 ORDER BY created_at ASC',
+      [finalThreadId]
+    );
+    const history = historyResult.rows.map((row: any) => ({
+      messageType: row.message_type,
+      content: JSON.parse(row.content),
+      createdAt: row.created_at,
+    }));
 
     return NextResponse.json({
       threadId: finalThreadId,
@@ -74,8 +96,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const checkpoint = await checkpointer.getCheckpoint(threadId);
-    const history = await checkpointer.getHistory(threadId);
+    // Get latest checkpoint
+    const checkpointResult = await query(
+      'SELECT * FROM agent_state WHERE thread_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [threadId]
+    );
+
+    const checkpoint = checkpointResult.rows.length > 0
+      ? {
+          threadId: checkpointResult.rows[0].thread_id,
+          checkpointId: checkpointResult.rows[0].checkpoint_id,
+          state: JSON.parse(checkpointResult.rows[0].state),
+          metadata: JSON.parse(checkpointResult.rows[0].metadata || '{}'),
+        }
+      : null;
+
+    // Get history
+    const historyResult = await query(
+      'SELECT * FROM agent_history WHERE thread_id = $1 ORDER BY created_at ASC',
+      [threadId]
+    );
+    const history = historyResult.rows.map((row: any) => ({
+      messageType: row.message_type,
+      content: JSON.parse(row.content),
+      createdAt: row.created_at,
+    }));
 
     return NextResponse.json({
       threadId,
