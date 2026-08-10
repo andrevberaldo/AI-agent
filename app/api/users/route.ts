@@ -1,10 +1,10 @@
-import { query } from '@/lib/db';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const result = await query('SELECT * FROM users ORDER BY created_at DESC');
-    return NextResponse.json({ data: result.rows });
+    const users = await userRepository.getAll();
+    return NextResponse.json({ data: users });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
@@ -22,17 +22,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await query(
-      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-      [name, email]
-    );
-
-    return NextResponse.json({ data: result.rows[0] }, { status: 201 });
+    const user = await userRepository.create(name, email);
+    return NextResponse.json({ data: user }, { status: 201 });
   } catch (error: any) {
     if (error.code === '23505') {
       return NextResponse.json(
         { error: 'Email already exists' },
-        { status: 400 }
+        { status: 409 }
       );
     }
     return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });

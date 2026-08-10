@@ -1,12 +1,12 @@
-import { query } from './db';
+import { userRepository } from './repositories/userRepository';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 // Get Users Tool
 export const getUsers = tool(
   async () => {
-    const result = await query('SELECT * FROM users ORDER BY created_at DESC');
-    return JSON.stringify({ success: true, data: result.rows });
+    const users = await userRepository.getAll();
+    return JSON.stringify({ success: true, data: users });
   },
   {
     name: 'get_users',
@@ -20,11 +20,8 @@ export const createUser = tool(
   async (input: { name: string; email: string }) => {
     const { name, email } = input;
     try {
-      const result = await query(
-        'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-        [name, email]
-      );
-      return JSON.stringify({ success: true, data: result.rows[0] });
+      const user = await userRepository.create(name, email);
+      return JSON.stringify({ success: true, data: user });
     } catch (error: any) {
       if (error.code === '23505') {
         return JSON.stringify({ success: false, error: 'Email already exists' });
@@ -47,14 +44,11 @@ export const updateUser = tool(
   async (input: { id: number; name?: string; email?: string }) => {
     const { id, name, email } = input;
     try {
-      const result = await query(
-        'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
-        [name || null, email || null, id]
-      );
-      if (result.rows.length === 0) {
+      const user = await userRepository.update(id, name, email);
+      if (!user) {
         return JSON.stringify({ success: false, error: 'User not found' });
       }
-      return JSON.stringify({ success: true, data: result.rows[0] });
+      return JSON.stringify({ success: true, data: user });
     } catch (error: any) {
       if (error.code === '23505') {
         return JSON.stringify({ success: false, error: 'Email already exists' });
@@ -77,8 +71,8 @@ export const updateUser = tool(
 export const deleteUser = tool(
   async (input: { id: number }) => {
     const { id } = input;
-    const result = await query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
-    if (result.rows.length === 0) {
+    const deleted = await userRepository.delete(id);
+    if (!deleted) {
       return JSON.stringify({ success: false, error: 'User not found' });
     }
     return JSON.stringify({
