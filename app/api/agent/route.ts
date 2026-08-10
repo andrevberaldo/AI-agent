@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { processAgentRequest } from '@/lib/deepagent';
+import { AgentMessageSchema, AgentThreadSchema } from '@/lib/schemas';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -16,14 +17,14 @@ import { v4 as uuidv4 } from 'uuid';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, threadId } = body;
+    const validation = AgentMessageSchema.safeParse(body);
 
-    if (!message) {
-      return NextResponse.json(
-        { error: 'Message is required' },
-        { status: 400 }
-      );
+    if (!validation.success) {
+      const error = validation.error.errors[0];
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    const { message, threadId } = validation.data;
 
     const finalThreadId = threadId || uuidv4();
 
@@ -101,7 +102,15 @@ export async function GET(request: NextRequest) {
 
     if (!threadId) {
       return NextResponse.json(
-        { error: 'ThreadId is required' },
+        { error: 'threadId query parameter is required' },
+        { status: 400 }
+      );
+    }
+
+    const validation = AgentThreadSchema.safeParse({ threadId });
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid threadId format' },
         { status: 400 }
       );
     }
