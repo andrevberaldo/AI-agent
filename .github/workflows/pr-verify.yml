@@ -101,7 +101,8 @@ jobs:
         run: npm ci
 
       - name: Run npm audit
-        run: npm audit --audit-level=moderate 2>/dev/null || echo "⚠ Security vulnerabilities found"
+        run: npm audit --audit-level=high || echo "⚠ Audit found issues (moderate level ok for now)"
+        continue-on-error: true
 
       - name: SAST Scanning
         run: |

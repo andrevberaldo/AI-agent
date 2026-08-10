@@ -1,5 +1,17 @@
 const { Pool } = require('pg');
-require('dotenv').config({ path: '.env.local' });
+
+// Load .env.local if it exists (for local development)
+// In CI/CD, DATABASE_URL is passed via environment variables
+try {
+  require('dotenv').config({ path: '.env.local' });
+} catch (e) {
+  // .env.local doesn't exist, which is fine in CI/CD
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error('Error: DATABASE_URL environment variable is not set');
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
