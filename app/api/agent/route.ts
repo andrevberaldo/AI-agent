@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { processAgentRequest } from '@/lib/deepagent';
 import { AgentMessageSchema, AgentThreadSchema } from '@/lib/schemas';
+import { handleValidationError, handleDatabaseError } from '@/lib/errorHandler';
+import { logger } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -20,9 +22,11 @@ export async function POST(request: NextRequest) {
     const validation = AgentMessageSchema.safeParse(body);
 
     if (!validation.success) {
-      const firstIssue = validation.error.issues[0];
-      const errorMessage = firstIssue?.message || 'Invalid request';
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
+      const errorResponse = handleValidationError(validation.error, { endpoint: 'POST /api/agent' });
+      return NextResponse.json(
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
+      );
     }
 
     const { message, threadId } = validation.data;
@@ -88,11 +92,11 @@ export async function POST(request: NextRequest) {
       message: assistantMessage,
       history,
     });
-  } catch (error) {
-    console.error('Agent error:', error);
+  } catch (error: any) {
+    const errorResponse = handleDatabaseError(error, { endpoint: 'POST /api/agent' });
     return NextResponse.json(
-      { error: 'Failed to process message' },
-      { status: 500 }
+      { error: errorResponse.message, errorId: errorResponse.errorId },
+      { status: errorResponse.status }
     );
   }
 }
@@ -110,9 +114,10 @@ export async function GET(request: NextRequest) {
 
     const validation = AgentThreadSchema.safeParse({ threadId });
     if (!validation.success) {
+      const errorResponse = handleValidationError(validation.error, { endpoint: 'GET /api/agent', threadId });
       return NextResponse.json(
-        { error: 'Invalid threadId format' },
-        { status: 400 }
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
       );
     }
 
@@ -148,9 +153,10 @@ export async function GET(request: NextRequest) {
       history,
     });
   } catch (error) {
-    console.error('Failed to fetch agent state:', error);
+    const errorId = uuidv4();
+    logger.error('Failed to fetch agent state', { errorId, error: error as Error });
     return NextResponse.json(
-      { error: 'Failed to fetch agent state' },
+      { error: `An error occurred. Reference: ${errorId}`, errorId },
       { status: 500 }
     );
   }

@@ -1,6 +1,8 @@
 import { userRepository } from '@/lib/repositories/userRepository';
 import { UpdateUserSchema, UserIdSchema } from '@/lib/schemas';
-import { handleDatabaseError } from '@/lib/errorHandler';
+import { handleDatabaseError, handleValidationError } from '@/lib/errorHandler';
+import { logger } from '@/lib/logger';
+import { v4 as uuidv4 } from 'uuid';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
@@ -11,7 +13,11 @@ export async function GET(
   try {
     const validation = UserIdSchema.safeParse({ id });
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
+      const errorResponse = handleValidationError(validation.error, { endpoint: 'GET /api/users/[id]', id });
+      return NextResponse.json(
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
+      );
     }
 
     const user = await userRepository.getById(validation.data.id);
@@ -20,7 +26,12 @@ export async function GET(
     }
     return NextResponse.json({ data: user });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch user' }, { status: 500 });
+    const errorId = uuidv4();
+    logger.error('Failed to fetch user', { errorId, error: error as Error });
+    return NextResponse.json(
+      { error: `An error occurred. Reference: ${errorId}`, errorId },
+      { status: 500 }
+    );
   }
 }
 
@@ -32,15 +43,21 @@ export async function PUT(
   try {
     const idValidation = UserIdSchema.safeParse({ id });
     if (!idValidation.success) {
-      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
+      const errorResponse = handleValidationError(idValidation.error, { endpoint: 'PUT /api/users/[id]', id });
+      return NextResponse.json(
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
+      );
     }
 
     const body = await request.json();
     const bodyValidation = UpdateUserSchema.safeParse(body);
     if (!bodyValidation.success) {
-      const firstIssue = bodyValidation.error.issues[0];
-      const errorMessage = firstIssue?.message || 'Invalid request';
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
+      const errorResponse = handleValidationError(bodyValidation.error, { endpoint: 'PUT /api/users/[id]', id });
+      return NextResponse.json(
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
+      );
     }
 
     const { name, email } = bodyValidation.data;
@@ -51,9 +68,9 @@ export async function PUT(
 
     return NextResponse.json({ data: user });
   } catch (error: any) {
-    const errorResponse = handleDatabaseError(error);
+    const errorResponse = handleDatabaseError(error, { endpoint: 'PUT /api/users/[id]', id });
     return NextResponse.json(
-      { error: errorResponse.message },
+      { error: errorResponse.message, errorId: errorResponse.errorId },
       { status: errorResponse.status }
     );
   }
@@ -67,7 +84,11 @@ export async function DELETE(
   try {
     const validation = UserIdSchema.safeParse({ id });
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
+      const errorResponse = handleValidationError(validation.error, { endpoint: 'DELETE /api/users/[id]', id });
+      return NextResponse.json(
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
+      );
     }
 
     const deleted = await userRepository.delete(validation.data.id);
@@ -77,6 +98,11 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
+    const errorId = uuidv4();
+    logger.error('Failed to delete user', { errorId, error: error as Error });
+    return NextResponse.json(
+      { error: `An error occurred. Reference: ${errorId}`, errorId },
+      { status: 500 }
+    );
   }
 }

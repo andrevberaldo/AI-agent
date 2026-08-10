@@ -1,7 +1,8 @@
 import { userRepository } from '@/lib/repositories/userRepository';
 import { CreateUserSchema } from '@/lib/schemas';
-import { handleDatabaseError } from '@/lib/errorHandler';
+import { handleDatabaseError, handleValidationError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { v4 as uuidv4 } from 'uuid';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -17,8 +18,12 @@ export async function GET(request: NextRequest) {
     logger.info('Retrieved users', { count: Array.isArray(users) ? users.length : users.data.length });
     return NextResponse.json({ data: users });
   } catch (error) {
-    logger.error('Failed to fetch users', error as Error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    const errorId = uuidv4();
+    logger.error('Failed to fetch users', { errorId, error: error as Error });
+    return NextResponse.json(
+      { error: `An error occurred. Reference: ${errorId}`, errorId },
+      { status: 500 }
+    );
   }
 }
 
@@ -28,10 +33,11 @@ export async function POST(request: NextRequest) {
     const validation = CreateUserSchema.safeParse(body);
 
     if (!validation.success) {
-      const firstIssue = validation.error.issues[0];
-      const errorMessage = firstIssue?.message || 'Invalid request';
-      logger.warn('User creation validation failed', { error: errorMessage });
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
+      const errorResponse = handleValidationError(validation.error, { endpoint: 'POST /api/users' });
+      return NextResponse.json(
+        { error: errorResponse.message, errorId: errorResponse.errorId },
+        { status: errorResponse.status }
+      );
     }
 
     const { name, email } = validation.data;
@@ -39,10 +45,9 @@ export async function POST(request: NextRequest) {
     logger.info('User created successfully', { userId: user.id, email });
     return NextResponse.json({ data: user }, { status: 201 });
   } catch (error: any) {
-    logger.error('Failed to create user', error);
-    const errorResponse = handleDatabaseError(error);
+    const errorResponse = handleDatabaseError(error, { endpoint: 'POST /api/users', email: error?.detail });
     return NextResponse.json(
-      { error: errorResponse.message },
+      { error: errorResponse.message, errorId: errorResponse.errorId },
       { status: errorResponse.status }
     );
   }

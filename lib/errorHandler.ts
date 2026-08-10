@@ -1,60 +1,69 @@
+import { v4 as uuidv4 } from 'uuid';
+import { logger } from './logger';
+
 export interface ApiErrorResponse {
   status: number;
   message: string;
+  errorId: string;
 }
 
 /**
- * Map database errors to HTTP responses
+ * Map database errors to HTTP responses with secure error handling
+ * - Logs full error details server-side with UUID for debugging
+ * - Returns only generic message + errorId to frontend
  * PostgreSQL error codes: https://www.postgresql.org/docs/current/errcodes-appendix.html
  */
-export function handleDatabaseError(error: any): ApiErrorResponse {
-  if (error.code === '23505') {
-    return {
-      status: 409,
-      message: 'Email already exists',
-    };
+export function handleDatabaseError(error: any, context?: Record<string, any>): ApiErrorResponse {
+  const errorId = uuidv4();
+  let status = 500;
+
+  // Determine status code based on error type
+  if (error.code === '23505' || error.code === '23503' || error.code === '23502' || error.code === '23514') {
+    status = 400;
+  } else if (error.code === '23505') {
+    status = 409;
   }
 
-  if (error.code === '23503') {
-    return {
-      status: 400,
-      message: 'Invalid reference: foreign key constraint violation',
-    };
-  }
+  // Log full error details server-side
+  logger.error('Database error occurred', {
+    errorId,
+    code: error.code,
+    message: error.message,
+    stack: error.stack,
+    ...context,
+  });
 
-  if (error.code === '23502') {
-    return {
-      status: 400,
-      message: 'Missing required field',
-    };
-  }
-
-  if (error.code === '23514') {
-    return {
-      status: 400,
-      message: 'Value violates check constraint',
-    };
-  }
+  // Return generic message based on status code
+  const genericMessages: Record<number, string> = {
+    400: 'Invalid data provided.',
+    409: 'Resource conflict occurred.',
+    500: 'An error occurred.',
+  };
 
   return {
-    status: 500,
-    message: 'Database error',
+    status,
+    message: `${genericMessages[status] || 'An error occurred.'} Reference: ${errorId}`,
+    errorId,
   };
 }
 
 /**
- * Map validation errors to HTTP responses
+ * Map validation errors to HTTP responses with secure error handling
+ * - Logs validation errors server-side with UUID
+ * - Returns only generic message + errorId to frontend
  */
-export function handleValidationError(error: any): ApiErrorResponse {
-  if (error instanceof SyntaxError) {
-    return {
-      status: 400,
-      message: 'Invalid JSON in request body',
-    };
-  }
+export function handleValidationError(error: any, context?: Record<string, any>): ApiErrorResponse {
+  const errorId = uuidv4();
+
+  logger.warn('Validation error occurred', {
+    errorId,
+    message: error.message,
+    ...context,
+  });
 
   return {
     status: 400,
-    message: error.message || 'Validation error',
+    message: `Invalid input provided. Reference: ${errorId}`,
+    errorId,
   };
 }
