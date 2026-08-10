@@ -1,17 +1,42 @@
 import { query } from '../db';
+import { User } from '../types';
 
-export interface User {
-  id: number;
-  name: string;
-  email: string;
-  created_at: string;
-  updated_at: string;
+export interface PaginationOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export class UserRepository {
-  async getAll(): Promise<User[]> {
-    const result = await query('SELECT * FROM users ORDER BY created_at DESC');
-    return result.rows;
+  async getAll(options?: PaginationOptions): Promise<User[] | PaginatedResult<User>> {
+    const limit = Math.min(options?.limit ?? 50, 100);
+    const offset = options?.offset ?? 0;
+
+    if (!options) {
+      const result = await query('SELECT * FROM users ORDER BY created_at DESC');
+      return result.rows;
+    }
+
+    const dataResult = await query(
+      'SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+
+    const countResult = await query('SELECT COUNT(*) FROM users');
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    return {
+      data: dataResult.rows,
+      total,
+      limit,
+      offset,
+    };
   }
 
   async getById(id: number): Promise<User | null> {
