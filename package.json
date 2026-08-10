@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "next build",
     "db:migrate": "node scripts/migrate.js"
   },
   "keywords": [],
