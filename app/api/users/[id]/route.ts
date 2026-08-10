@@ -38,8 +38,9 @@ export async function PUT(
     const body = await request.json();
     const bodyValidation = UpdateUserSchema.safeParse(body);
     if (!bodyValidation.success) {
-      const error = bodyValidation.error.errors[0];
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const firstIssue = bodyValidation.error.issues[0];
+      const errorMessage = firstIssue?.message || 'Invalid request';
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     const { name, email } = bodyValidation.data;

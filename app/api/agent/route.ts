@@ -20,8 +20,9 @@ export async function POST(request: NextRequest) {
     const validation = AgentMessageSchema.safeParse(body);
 
     if (!validation.success) {
-      const error = validation.error.errors[0];
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const firstIssue = validation.error.issues[0];
+      const errorMessage = firstIssue?.message || 'Invalid request';
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     const { message, threadId } = validation.data;

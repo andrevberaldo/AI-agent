@@ -28,9 +28,10 @@ export async function POST(request: NextRequest) {
     const validation = CreateUserSchema.safeParse(body);
 
     if (!validation.success) {
-      const error = validation.error.errors[0];
-      logger.warn('User creation validation failed', { error: error.message });
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const firstIssue = validation.error.issues[0];
+      const errorMessage = firstIssue?.message || 'Invalid request';
+      logger.warn('User creation validation failed', { error: errorMessage });
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     const { name, email } = validation.data;
